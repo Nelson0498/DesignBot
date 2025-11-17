@@ -178,38 +178,7 @@ class PedidoManager:
             'estado': self.estado
         }
 
-# --- PROCESAMIENTO DE LENGUAJE NATURAL MEJORADO ---
-class ProcesadorLenguajeNatural:
-    def __init__(self):
-        self.patrones = {
-            'cantidad': r'(\d+)\s*(?:unidades?|uds?|x|\*)',
-            'dimension_multiple': r'(\d+)\s*(pequeñ[ao]s?|median[ao]s?|grandes?|estándar)',
-            'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-        }
-    
-    def extraer_entidades(self, texto: str) -> Dict:
-        texto = texto.lower()
-        entidades = {
-            'cantidades': [],
-            'dimensiones': [],
-            'tipos_mueble': [],
-            'materiales': [],
-            'colores': [],
-            'acciones': []
-        }
-        
-        # Extraer cantidades
-        cantidades = re.findall(self.patrones['cantidad'], texto)
-        entidades['cantidades'] = [int(c[0]) for c in cantidades]
-        
-        # Detectar acciones
-        for accion in Configuracion.PATRONES_ENTRADA["acciones"]:
-            if accion in texto:
-                entidades['acciones'].append(accion)
-        
-        return entidades
-
-# --- DESIGNBOT LLM (CLASE PRINCIPAL) ---
+# --- DESIGNBOT LLM (CON LÓGICA COMPLETA) ---
 class DesignBotLLM:
     def __init__(self):
         self.pedido_manager = PedidoManager()
@@ -253,16 +222,223 @@ class DesignBotLLM:
         return None
 
     def procesar_mensaje(self, user_input: str) -> str:
-        # Implementación simplificada - puedes copiar tu implementación original aquí
         input_clean = user_input.lower().strip()
         
-        # Respuesta básica por estado
+        # Evitar procesar si es la misma respuesta
+        if self.ultima_respuesta and user_input.strip() == "":
+            return self.ultima_respuesta
+
+        # 1. SALUDOS
+        if any(saludo in input_clean for saludo in ["hola", "hi", "hello", "buenos días", "buenas"]):
+            if "me llamo" in input_clean or "soy" in input_clean or "nombre" in input_clean:
+                if "me llamo" in input_clean:
+                    nombre = input_clean.split("me llamo")[1].strip()
+                elif "soy" in input_clean:
+                    nombre = input_clean.split("soy")[1].strip()
+                else:
+                    nombre = "cliente"
+                self.pedido_manager.nombre_cliente = nombre.split()[0].title()
+                respuesta = f"¡Hola {self.pedido_manager.nombre_cliente}! 👋 Soy DesignBot. ¿Te gustaría diseñar algún mueble personalizado?"
+                self.ultima_respuesta = respuesta
+                return respuesta
+            
+            respuesta = "¡Hola! 👋 Soy DesignBot, tu asistente para diseño de muebles personalizados. ¿Te gustaría diseñar algún mueble?"
+            self.ultima_respuesta = respuesta
+            return respuesta
+
+        # 2. INICIAR PEDIDO
+        if (any(frase in input_clean for frase in ["sí", "si", "por favor", "quiero", "diseñar", "mueble", "personalizar", "empezar", "comenzar"]) 
+            and self.pedido_manager.estado == EstadoPedido.INICIO):
+            
+            self.pedido_manager.estado = EstadoPedido.ESPERANDO_TIPO
+            respuesta = "¡Excelente! 🛋️ ¿Qué tipo de mueble te gustaría diseñar?\n\n" + \
+                       "• Silla\n• Mesa\n• Sofá\n• Estantería\n• Escritorio"
+            self.ultima_respuesta = respuesta
+            return respuesta
+
+        # 3. DETECCIÓN DE TIPO DE MUEBLE
+        tipos = {
+            "silla": "SILLA", "sillas": "SILLA",
+            "mesa": "MESA", "mesas": "MESA", 
+            "sofá": "SOFÁ", "sofa": "SOFÁ", "sofas": "SOFÁ",
+            "estantería": "ESTANTERÍA", "estanteria": "ESTANTERÍA", "estanterías": "ESTANTERÍA",
+            "escritorio": "ESCRITORIO", "escritorios": "ESCRITORIO"
+        }
+
+        for tipo_key, tipo_val in tipos.items():
+            if tipo_key in input_clean:
+                if self.pedido_manager.estado in [EstadoPedido.INICIO, EstadoPedido.ESPERANDO_TIPO, EstadoPedido.AGREGANDO_MAS]:
+                    cantidad = self.extraer_cantidad(input_clean)
+                    self.pedido_manager.iniciar_nuevo_item(tipo_val, cantidad)
+                    self.pedido_manager.estado = EstadoPedido.ESPERANDO_MATERIAL
+                    cantidad_texto = f" ({cantidad} unidad{'es' if cantidad > 1 else ''})" if cantidad > 1 else ""
+                    respuesta = f"✅ **{tipo_val.title()}{cantidad_texto} seleccionado**\n\n" + \
+                               "¿Qué material prefieres?\n\n" + \
+                               "• Madera noble\n• Madera MDF\n• Metal\n• Vidrio\n• Bambú\n• Madera reciclada"
+                    self.ultima_respuesta = respuesta
+                    return respuesta
+
+        # 4. DETECCIÓN DE MATERIAL
+        materiales = {
+            "madera noble": "MADERA_NOBLE", "roble": "MADERA_NOBLE", "nogal": "MADERA_NOBLE", 
+            "madera": "MADERA_NOBLE", "noble": "MADERA_NOBLE",
+            "mdf": "MADERA_MDF", "madera mdf": "MADERA_MDF",
+            "metal": "METAL", "acero": "METAL", "metálico": "METAL",
+            "vidrio": "VIDRIO", "cristal": "VIDRIO",
+            "bambú": "BAMBÚ", "bambu": "BAMBÚ",
+            "madera reciclada": "MADERA_RECICLADA", "reciclada": "MADERA_RECICLADA"
+        }
+
+        for material_key, material_val in materiales.items():
+            if material_key in input_clean and self.pedido_manager.estado == EstadoPedido.ESPERANDO_MATERIAL:
+                self.pedido_manager.actualizar_item_actual('material', material_val)
+                self.pedido_manager.estado = EstadoPedido.ESPERANDO_COLOR
+                respuesta = f"✅ **Material {material_val.replace('_', ' ').title()} seleccionado**\n\n" + \
+                           "¿Qué color prefieres?\n\n" + \
+                           "• Natural\n• Blanco\n• Negro\n• Madera oscura\n• Gris"
+                self.ultima_respuesta = respuesta
+                return respuesta
+
+        # 5. DETECCIÓN DE COLOR
+        colores = {
+            "natural": "NATURAL", "color natural": "NATURAL", "sin color": "NATURAL",
+            "blanco": "BLANCO", "color blanco": "BLANCO",
+            "negro": "NEGRO", "color negro": "NEGRO",
+            "madera oscura": "MADERA_OSCURA", "oscuro": "MADERA_OSCURA", "caoba": "MADERA_OSCURA", "wengué": "MADERA_OSCURA",
+            "gris": "GRIS", "color gris": "GRIS"
+        }
+
+        for color_key, color_val in colores.items():
+            if color_key in input_clean and self.pedido_manager.estado == EstadoPedido.ESPERANDO_COLOR:
+                self.pedido_manager.actualizar_item_actual('color', color_val)
+                self.pedido_manager.estado = EstadoPedido.ESPERANDO_DIMENSION
+                respuesta = f"✅ **Color {color_key.title()} seleccionado**\n\n" + \
+                           "¿Qué dimensiones prefieres?\n\n" + \
+                           "• Pequeño\n• Estándar\n• Grande"
+                self.ultima_respuesta = respuesta
+                return respuesta
+
+        # 6. DETECCIÓN DE DIMENSIONES
+        dimensiones_map = {
+            "pequeño": "PEQUEÑO", "pequeña": "PEQUEÑO", "pequeno": "PEQUEÑO", "chico": "PEQUEÑO", "s": "PEQUEÑO",
+            "estándar": "ESTÁNDAR", "estandar": "ESTÁNDAR", "normal": "ESTÁNDAR", "mediano": "ESTÁNDAR", "m": "ESTÁNDAR",
+            "grande": "GRANDE", "grand": "GRANDE", "l": "GRANDE"
+        }
+
+        for dim_key, dim_val in dimensiones_map.items():
+            if dim_key in input_clean and self.pedido_manager.estado == EstadoPedido.ESPERANDO_DIMENSION:
+                self.pedido_manager.actualizar_item_actual('dimensiones', dim_val)
+                if self.pedido_manager.agregar_item_actual_al_pedido():
+                    self.pedido_manager.estado = EstadoPedido.AGREGANDO_MAS
+                    respuesta = f"✅ **{dim_val.title()} agregado al pedido!** 🎉\n\n" + \
+                               f"{self.pedido_manager.obtener_resumen_detallado()}\n\n" + \
+                               "¿Te gustaría agregar otro mueble? (responde 'sí' para agregar más o 'no' para finalizar)"
+                    self.ultima_respuesta = respuesta
+                    return respuesta
+
+        # 7. MANEJO DE "¿QUIERES AGREGAR MÁS?"
+        if self.pedido_manager.estado == EstadoPedido.AGREGANDO_MAS:
+            if any(palabra in input_clean for palabra in ["sí", "si", "s", "quiero", "agregar", "otro", "más", "mas", "otra"]):
+                self.pedido_manager.estado = EstadoPedido.ESPERANDO_TIPO
+                respuesta = "¡Perfecto! ¿Qué otro mueble te gustaría agregar?\n\n" + \
+                           "• Silla\n• Mesa\n• Sofá\n• Estantería\n• Escritorio"
+                self.ultima_respuesta = respuesta
+                return respuesta
+            elif any(palabra in input_clean for palabra in ["no", "n", "listo", "terminar", "finalizar", "eso es todo"]):
+                self.pedido_manager.estado = EstadoPedido.FINALIZANDO
+                respuesta = f"📦 **PEDIDO COMPLETO**\n\n{self.pedido_manager.obtener_resumen_detallado()}\n\n" + \
+                           "¿Todo correcto? (responde 'sí' para confirmar o 'modificar' para hacer cambios)"
+                self.ultima_respuesta = respuesta
+                return respuesta
+
+        # 8. CONFIRMACIÓN FINAL
+        if (any(palabra in input_clean for palabra in ["sí", "si", "confirmar", "correcto", "ok", "vale"]) 
+            and self.pedido_manager.estado == EstadoPedido.FINALIZANDO):
+            
+            self.pedido_manager.estado = EstadoPedido.ESPERANDO_CONTACTO
+            nombre_cliente = f", {self.pedido_manager.nombre_cliente}" if self.pedido_manager.nombre_cliente else ""
+            respuesta = f"📧 **INFORMACIÓN DE CONTACTO**{nombre_cliente}:\n\n" + \
+                       "¡Perfecto! Por favor, compártenos tu email para contactarte:"
+            self.ultima_respuesta = respuesta
+            return respuesta
+
+        # 9. FINALIZACIÓN
+        if self.pedido_manager.estado == EstadoPedido.ESPERANDO_CONTACTO:
+            # Validar email básico
+            if "@" in user_input and "." in user_input:
+                self.pedido_manager.estado = EstadoPedido.COMPLETADO
+                total = self.pedido_manager.calcular_total_pedido()
+                nombre_cliente = f", {self.pedido_manager.nombre_cliente}" if self.pedido_manager.nombre_cliente else ""
+                respuesta = f"""🎉 **¡PEDIDO CONFIRMADO!** 🎉{nombre_cliente}
+
+{self.pedido_manager.obtener_resumen_detallado()}
+
+📧 **Email de contacto:** {user_input}
+
+📅 **Proceso:**
+1. Confirmación por email en 24 horas
+2. Diseño técnico (2-3 días)  
+3. Fabricación (7-10 días)
+4. Entrega programada
+
+¡Gracias por tu pedido! 🛋️"""
+                # Reiniciar para nuevo pedido
+                self.pedido_manager.reiniciar_pedido()
+                self.ultima_respuesta = respuesta
+                return respuesta
+            else:
+                respuesta = "Por favor, ingresa un email válido:"
+                self.ultima_respuesta = respuesta
+                return respuesta
+
+        # 10. PROCESAR MODIFICACIONES AL PEDIDO
+        if self.pedido_manager.items and any(palabra in input_clean for palabra in ["modificar", "cambiar", "eliminar", "quitar", "quita", "borrar"]):
+            resultado_modificacion = self.procesar_modificacion_pedido(input_clean)
+            if resultado_modificacion:
+                self.ultima_respuesta = resultado_modificacion
+                return resultado_modificacion
+
+        # 11. CONSULTA DE RESUMEN
+        if any(palabra in input_clean for palabra in ["resumen", "pedido", "carrito", "qué tengo", "ver pedido"]):
+            if self.pedido_manager.items:
+                respuesta = f"📋 **TU PEDIDO ACTUAL:**\n\n{self.pedido_manager.obtener_resumen_detallado()}\n\n" + \
+                           "¿Quieres agregar algo más o finalizar?"
+                self.ultima_respuesta = respuesta
+                return respuesta
+            else:
+                respuesta = "🛒 Tu pedido está vacío. ¿Te gustaría agregar algún mueble?"
+                self.ultima_respuesta = respuesta
+                return respuesta
+
+        # 12. CANCELAR
+        if any(palabra in input_clean for palabra in ["cancelar", "reiniciar", "empezar de nuevo"]):
+            self.pedido_manager.reiniciar_pedido()
+            respuesta = "🔄 **Pedido cancelado**. ¿Te gustaría comenzar un nuevo diseño?"
+            self.ultima_respuesta = respuesta
+            return respuesta
+
+        # --- RESPUESTAS POR ESTADO ---
         if self.pedido_manager.estado == EstadoPedido.INICIO:
-            return "¡Hola! 👋 Soy DesignBot. ¿Te gustaría diseñar algún mueble personalizado? (responde 'sí' para comenzar)"
+            respuesta = "¡Hola! ¿Te gustaría diseñar un mueble personalizado? (responde 'sí' para comenzar)"
         elif self.pedido_manager.estado == EstadoPedido.ESPERANDO_TIPO:
-            return "¿Qué tipo de mueble te gustaría? Tenemos: Silla, Mesa, Sofá, Estantería o Escritorio"
-        
-        return "¿En qué más puedo ayudarte con tu pedido?"
+            respuesta = "Por favor, elige el tipo de mueble: Silla, Mesa, Sofá, Estantería o Escritorio"
+        elif self.pedido_manager.estado == EstadoPedido.ESPERANDO_MATERIAL:
+            respuesta = "¿Qué material prefieres? (Madera noble, MDF, Metal, Vidrio, Bambú o Madera reciclada)"
+        elif self.pedido_manager.estado == EstadoPedido.ESPERANDO_COLOR:
+            respuesta = "¿Qué color te gustaría? (Natural, Blanco, Negro, Madera oscura o Gris)"
+        elif self.pedido_manager.estado == EstadoPedido.ESPERANDO_DIMENSION:
+            respuesta = "¿Qué dimensiones prefieres? (Pequeño, Estándar o Grande)"
+        elif self.pedido_manager.estado == EstadoPedido.AGREGANDO_MAS:
+            respuesta = f"{self.pedido_manager.obtener_resumen_detallado()}\n\n¿Quieres agregar otro mueble? (sí/no)"
+        elif self.pedido_manager.estado == EstadoPedido.FINALIZANDO:
+            respuesta = f"📦 **PEDIDO COMPLETO**\n\n{self.pedido_manager.obtener_resumen_detallado()}\n\n¿Confirmamos? (sí/no)"
+        elif self.pedido_manager.estado == EstadoPedido.ESPERANDO_CONTACTO:
+            respuesta = "Por favor, ingresa tu email para contactarte:"
+        else:
+            respuesta = "¿En qué más puedo ayudarte con tu pedido de muebles?"
+
+        self.ultima_respuesta = respuesta
+        return respuesta
 
 # --- INTERFAZ STREAMLIT ---
 def inicializar_session_state():
@@ -270,8 +446,6 @@ def inicializar_session_state():
         st.session_state.chat_history = []
     if 'designbot' not in st.session_state:
         st.session_state.designbot = DesignBotLLM()
-    if 'procesador_nlp' not in st.session_state:
-        st.session_state.nlp = ProcesadorLenguajeNatural()
 
 def crear_sidebar():
     with st.sidebar:
@@ -301,7 +475,7 @@ def mostrar_chat():
     st.subheader("💬 DesignBot Assistant")
     
     # Contenedor de chat
-    chat_container = st.container(height=400)
+    chat_container = st.container(height=500)
     
     with chat_container:
         for mensaje in st.session_state.chat_history:
