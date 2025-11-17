@@ -1,140 +1,12 @@
 # app.py
 import streamlit as st
-
-# ✅ DEBE SER EL PRIMER COMANDO
-st.set_page_config(
-    page_title="DesignBot Pro - Muebles Personalizados",
-    page_icon="🛋️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 import pandas as pd
 from datetime import datetime
 import re
 from typing import List, Dict, Any, Optional
 import json
 
-# =============================================
-# E. STACK TECNOLÓGICO JUSTIFICADO
-# =============================================
-"""
-JUSTIFICACIÓN TECNOLÓGICA:
-- Streamlit: Para interfaz web interactiva
-- Regex: Para procesamiento básico de lenguaje natural
-- Sistema de estados: Para manejo de conversación
-- No se requieren modelos complejos para el alcance del proyecto
-"""
-
-# =============================================
-# D. SISTEMA DE INTENCIONES Y ENTIDADES FORMAL
-# =============================================
-class SistemaIntenciones:
-    """Sistema formal de clasificación de intenciones y extracción de entidades"""
-    
-    def __init__(self):
-        # D.1 INTENCIONES DEFINIDAS FORMALMENTE (mínimo 3)
-        self.intenciones = {
-            'saludar': ["hola", "hi", "hello", "buenos días", "buenas"],
-            'iniciar_pedido': ["sí", "si", "quiero", "diseñar", "mueble", "personalizar"],
-            'consultar_pedido': ["resumen", "pedido", "carrito", "qué tengo"],
-            'modificar_pedido': ["modificar", "cambiar", "eliminar", "quitar"],
-            'finalizar_pedido': ["no", "terminar", "finalizar", "listo"]
-        }
-        
-        # D.2 ENTIDADES DEFINIDAS FORMALMENTE (mínimo 2 tipos)
-        self.entidades = {
-            'nombre': r'(me llamo|soy|mi nombre es)\s+([A-Za-záéíóúñ\s]+)',
-            'tipo_mueble': r'\b(silla|mesa|sofá|sofa|estantería|estanteria|escritorio)\b',
-            'cantidad': r'(\d+)\s*(unidades?|uds?|x)',
-            'material': r'\b(madera noble|roble|nogal|mdf|metal|acero|vidrio|cristal|bambú|madera reciclada)\b',
-            'color': r'\b(natural|blanco|negro|madera oscura|oscuro|caoba|gris)\b',
-            'dimension': r'\b(pequeño|pequeña|chico|estándar|estandar|normal|mediano|grande)\b'
-        }
-    
-    def clasificar_intencion(self, texto: str) -> str:
-        """Clasifica formalmente la intención del usuario"""
-        texto_lower = texto.lower()
-        
-        for intencion, patrones in self.intenciones.items():
-            for patron in patrones:
-                if patron in texto_lower:
-                    return intencion
-        return "desconocido"
-    
-    def extraer_entidades(self, texto: str) -> Dict[str, Any]:
-        """Extrae entidades formalmente del texto"""
-        entidades = {}
-        
-        for entidad, patron in self.entidades.items():
-            matches = re.findall(patron, texto.lower())
-            if matches:
-                if entidad == 'nombre':
-                    entidades[entidad] = matches[0][1].strip().title()
-                elif entidad == 'cantidad':
-                    entidades[entidad] = int(matches[0][0])
-                else:
-                    valor = matches[0] if isinstance(matches[0], str) else matches[0][0]
-                    entidades[entidad] = valor
-        
-        return entidades
-
-# =============================================
-# C. SISTEMA DE MEMORIA (REQUISITO CLAVE)
-# =============================================
-class MemoriaConversacion:
-    """Sistema de memoria que recuerda información clave entre interacciones"""
-    
-    def __init__(self):
-        self.resetear()
-    
-    def resetear(self):
-        self.nombre_usuario = None
-        # Memoria de preferencias del usuario
-        self.preferencias = {
-            'material_favorito': None,
-            'color_favorito': None,
-            'dimension_favorita': None,
-            'tipo_favorito': None
-        }
-        self.historial_interacciones = []
-    
-    def guardar_nombre(self, nombre: str):
-        """Guarda el nombre del usuario en memoria"""
-        self.nombre_usuario = nombre
-        self._registrar_evento(f"Usuario proporcionó nombre: {nombre}")
-    
-    def guardar_preferencia(self, tipo: str, valor: str):
-        """Guarda preferencias del usuario en memoria"""
-        if tipo in self.preferencias:
-            self.preferencias[tipo] = valor
-            self._registrar_evento(f"Preferencia guardada: {tipo} = {valor}")
-    
-    def _registrar_evento(self, evento: str):
-        """Registra evento en el historial"""
-        self.historial_interacciones.append({
-            'timestamp': datetime.now().strftime("%H:%M:%S"),
-            'evento': evento
-        })
-    
-    def personalizar_respuesta(self, respuesta_base: str) -> str:
-        """Personaliza respuestas basado en la memoria del usuario"""
-        respuesta = respuesta_base
-        
-        # Personalizar con nombre si está disponible
-        if self.nombre_usuario:
-            if "¡Hola!" in respuesta:
-                respuesta = respuesta.replace("¡Hola!", f"¡Hola {self.nombre_usuario}!")
-            elif "Hola" in respuesta and self.nombre_usuario not in respuesta:
-                respuesta = f"¡Hola {self.nombre_usuario}! {respuesta}"
-        
-        # Personalizar con preferencias recordadas
-        if self.preferencias['material_favorito'] and "material" in respuesta.lower():
-            respuesta += f"\n\n💡 Por cierto, recuerdo que te gusta el {self.preferencias['material_favorito']}"
-        
-        return respuesta
-
-# --- CONFIGURACIÓN (MANTENIENDO TU ESTRUCTURA) ---
+# --- CONFIGURACIÓN MEJORADA ---
 class Configuracion:
     CATALOGO = {
         "tipos_mueble": {
@@ -165,7 +37,15 @@ class Configuracion:
             "GRANDE": {"factor": 1.3, "descripcion": "Dimensiones ampliadas"}
         }
     }
+    
+    PATRONES_ENTRADA = {
+        "saludos": ["hola", "hi", "hello", "buenos días", "buenas tardes", "buenas"],
+        "afirmaciones": ["sí", "si", "por favor", "ok", "vale", "correcto", "confirmar"],
+        "negaciones": ["no", "n", "cancelar", "reiniciar"],
+        "acciones": ["modificar", "cambiar", "eliminar", "quitar", "borrar"]
+    }
 
+# --- ESTADOS DEL PEDIDO ---
 class EstadoPedido:
     INICIO = "inicio"
     ESPERANDO_TIPO = "esperando_tipo"
@@ -179,6 +59,7 @@ class EstadoPedido:
     ESPERANDO_CONTACTO = "esperando_contacto"
     COMPLETADO = "completado"
 
+# --- CLASES DEL SISTEMA ---
 class ItemPedido:
     def __init__(self, tipo_mueble: str, material: str, color: str, dimensiones: str, cantidad: int = 1):
         self.tipo_mueble = tipo_mueble
@@ -201,6 +82,17 @@ class ItemPedido:
 
     def obtener_descripcion(self) -> str:
         return f"{self.cantidad}x {self.tipo_mueble.title()} {self.dimensiones.title()}"
+
+    def to_dict(self) -> Dict:
+        return {
+            'tipo_mueble': self.tipo_mueble,
+            'material': self.material,
+            'color': self.color,
+            'dimensiones': self.dimensiones,
+            'cantidad': self.cantidad,
+            'precio_unitario': self.calcular_precio_unitario(),
+            'precio_total': self.calcular_precio_total()
+        }
 
 class PedidoManager:
     def __init__(self):
@@ -276,22 +168,21 @@ class PedidoManager:
         resumen += f"🎯 **TOTAL DEL PEDIDO: ${self.calcular_total_pedido():.2f}**"
         return resumen
 
-# =============================================
-# B. CHATBOT MEJORADO CON TODOS LOS REQUISITOS
-# =============================================
+    def exportar_pedido(self) -> Dict:
+        return {
+            'cliente': self.nombre_cliente,
+            'email': self.email,
+            'fecha': self.fecha_creacion.isoformat(),
+            'items': [item.to_dict() for item in self.items],
+            'total': self.calcular_total_pedido(),
+            'estado': self.estado
+        }
+
+# --- DESIGNBOT LLM (CON LÓGICA COMPLETA) ---
 class DesignBotLLM:
     def __init__(self):
         self.pedido_manager = PedidoManager()
-        self.sistema_intenciones = SistemaIntenciones()  # ✅ NUEVO: Sistema formal
-        self.memoria = MemoriaConversacion()  # ✅ NUEVO: Sistema de memoria
         self.ultima_respuesta = None
-        
-        # ✅ CORREGIDO: Mapeo de dimensiones sin conflictos
-        self.mapeo_dimensiones_corregido = {
-            "pequeño": "PEQUEÑO", "pequeña": "PEQUEÑO", "pequeno": "PEQUEÑO", "chico": "PEQUEÑO",
-            "estándar": "ESTÁNDAR", "estandar": "ESTÁNDAR", "normal": "ESTÁNDAR", "mediano": "ESTÁNDAR",
-            "grande": "GRANDE", "grand": "GRANDE"
-        }
 
     def extraer_cantidad(self, texto: str) -> int:
         texto = texto.lower()
@@ -310,32 +201,55 @@ class DesignBotLLM:
                 return cantidad
         return 1
 
+    def procesar_modificacion_pedido(self, input_clean: str) -> str:
+        """Procesa solicitudes de modificación del pedido"""
+        if "eliminar" in input_clean or "quitar" in input_clean:
+            numeros = re.findall(r'\d+', input_clean)
+            if numeros:
+                index = int(numeros[0]) - 1
+                if self.pedido_manager.eliminar_item(index):
+                    return f"✅ **Item {index + 1} eliminado del pedido**\n\n{self.pedido_manager.obtener_resumen_detallado()}"
+        
+        if "modificar" in input_clean or "cambiar" in input_clean:
+            numeros = re.findall(r'\d+', input_clean)
+            if numeros:
+                index = int(numeros[0]) - 1
+                if 0 <= index < len(self.pedido_manager.items):
+                    nueva_cantidad = self.extraer_cantidad(input_clean)
+                    if nueva_cantidad > 0:
+                        if self.pedido_manager.modificar_cantidad_item(index, nueva_cantidad):
+                            return f"✅ **Cantidad modificada**\n\n{self.pedido_manager.obtener_resumen_detallado()}"
+        return None
+
     def procesar_mensaje(self, user_input: str) -> str:
-        # ✅ NUEVO: Usar sistema formal de intenciones
-        intencion = self.sistema_intenciones.clasificar_intencion(user_input)
-        entidades = self.sistema_intenciones.extraer_entidades(user_input)
-        
-        # ✅ NUEVO: Actualizar memoria con entidades detectadas
-        if 'nombre' in entidades:
-            self.memoria.guardar_nombre(entidades['nombre'])
-            self.pedido_manager.nombre_cliente = entidades['nombre']
-        
         input_clean = user_input.lower().strip()
         
         # Evitar procesar si es la misma respuesta
         if self.ultima_respuesta and user_input.strip() == "":
             return self.ultima_respuesta
 
-        # 1. SALUDOS (con memoria)
-        if intencion == "saludar":
-            respuesta = self.memoria.personalizar_respuesta(
-                "¡Hola! 👋 Soy DesignBot, tu asistente para diseño de muebles personalizados. ¿Te gustaría diseñar algún mueble?"
-            )
+        # 1. SALUDOS
+        if any(saludo in input_clean for saludo in ["hola", "hi", "hello", "buenos días", "buenas"]):
+            if "me llamo" in input_clean or "soy" in input_clean or "nombre" in input_clean:
+                if "me llamo" in input_clean:
+                    nombre = input_clean.split("me llamo")[1].strip()
+                elif "soy" in input_clean:
+                    nombre = input_clean.split("soy")[1].strip()
+                else:
+                    nombre = "cliente"
+                self.pedido_manager.nombre_cliente = nombre.split()[0].title()
+                respuesta = f"¡Hola {self.pedido_manager.nombre_cliente}! 👋 Soy DesignBot. ¿Te gustaría diseñar algún mueble personalizado?"
+                self.ultima_respuesta = respuesta
+                return respuesta
+            
+            respuesta = "¡Hola! 👋 Soy DesignBot, tu asistente para diseño de muebles personalizados. ¿Te gustaría diseñar algún mueble?"
             self.ultima_respuesta = respuesta
             return respuesta
 
         # 2. INICIAR PEDIDO
-        if (intencion == "iniciar_pedido" and self.pedido_manager.estado == EstadoPedido.INICIO):
+        if (any(frase in input_clean for frase in ["sí", "si", "por favor", "quiero", "diseñar", "mueble", "personalizar", "empezar", "comenzar"]) 
+            and self.pedido_manager.estado == EstadoPedido.INICIO):
+            
             self.pedido_manager.estado = EstadoPedido.ESPERANDO_TIPO
             respuesta = "¡Excelente! 🛋️ ¿Qué tipo de mueble te gustaría diseñar?\n\n" + \
                        "• Silla\n• Mesa\n• Sofá\n• Estantería\n• Escritorio"
@@ -364,7 +278,7 @@ class DesignBotLLM:
                     self.ultima_respuesta = respuesta
                     return respuesta
 
-        # 4. DETECCIÓN DE MATERIAL (con memoria)
+        # 4. DETECCIÓN DE MATERIAL
         materiales = {
             "madera noble": "MADERA_NOBLE", "roble": "MADERA_NOBLE", "nogal": "MADERA_NOBLE", 
             "madera": "MADERA_NOBLE", "noble": "MADERA_NOBLE",
@@ -379,15 +293,13 @@ class DesignBotLLM:
             if material_key in input_clean and self.pedido_manager.estado == EstadoPedido.ESPERANDO_MATERIAL:
                 self.pedido_manager.actualizar_item_actual('material', material_val)
                 self.pedido_manager.estado = EstadoPedido.ESPERANDO_COLOR
-                # ✅ NUEVO: Guardar en memoria
-                self.memoria.guardar_preferencia('material_favorito', material_key)
                 respuesta = f"✅ **Material {material_val.replace('_', ' ').title()} seleccionado**\n\n" + \
                            "¿Qué color prefieres?\n\n" + \
                            "• Natural\n• Blanco\n• Negro\n• Madera oscura\n• Gris"
                 self.ultima_respuesta = respuesta
                 return respuesta
 
-        # 5. DETECCIÓN DE COLOR (con memoria)
+        # 5. DETECCIÓN DE COLOR
         colores = {
             "natural": "NATURAL", "color natural": "NATURAL", "sin color": "NATURAL",
             "blanco": "BLANCO", "color blanco": "BLANCO",
@@ -400,23 +312,24 @@ class DesignBotLLM:
             if color_key in input_clean and self.pedido_manager.estado == EstadoPedido.ESPERANDO_COLOR:
                 self.pedido_manager.actualizar_item_actual('color', color_val)
                 self.pedido_manager.estado = EstadoPedido.ESPERANDO_DIMENSION
-                # ✅ NUEVO: Guardar en memoria
-                self.memoria.guardar_preferencia('color_favorito', color_key)
                 respuesta = f"✅ **Color {color_key.title()} seleccionado**\n\n" + \
                            "¿Qué dimensiones prefieres?\n\n" + \
                            "• Pequeño\n• Estándar\n• Grande"
                 self.ultima_respuesta = respuesta
                 return respuesta
 
-        # 6. ✅ CORREGIDO: DETECCIÓN DE DIMENSIONES (sin conflictos)
-        for dim_key, dim_val in self.mapeo_dimensiones_corregido.items():
+        # 6. DETECCIÓN DE DIMENSIONES
+        dimensiones_map = {
+            "pequeño": "PEQUEÑO", "pequeña": "PEQUEÑO", "pequeno": "PEQUEÑO", "chico": "PEQUEÑO", "s": "PEQUEÑO",
+            "estándar": "ESTÁNDAR", "estandar": "ESTÁNDAR", "normal": "ESTÁNDAR", "mediano": "ESTÁNDAR", "m": "ESTÁNDAR",
+            "grande": "GRANDE", "grand": "GRANDE", "l": "GRANDE"
+        }
+
+        for dim_key, dim_val in dimensiones_map.items():
             if dim_key in input_clean and self.pedido_manager.estado == EstadoPedido.ESPERANDO_DIMENSION:
                 self.pedido_manager.actualizar_item_actual('dimensiones', dim_val)
-                # ✅ NUEVO: Guardar en memoria
-                self.memoria.guardar_preferencia('dimension_favorita', dim_key)
                 if self.pedido_manager.agregar_item_actual_al_pedido():
                     self.pedido_manager.estado = EstadoPedido.AGREGANDO_MAS
-                    # ✅ CORREGIDO: Mostrar la dimensión correcta
                     respuesta = f"✅ **{dim_val.title()} agregado al pedido!** 🎉\n\n" + \
                                f"{self.pedido_manager.obtener_resumen_detallado()}\n\n" + \
                                "¿Te gustaría agregar otro mueble? (responde 'sí' para agregar más o 'no' para finalizar)"
@@ -425,21 +338,68 @@ class DesignBotLLM:
 
         # 7. MANEJO DE "¿QUIERES AGREGAR MÁS?"
         if self.pedido_manager.estado == EstadoPedido.AGREGANDO_MAS:
-            if intencion == "iniciar_pedido":  # "sí" para agregar más
+            if any(palabra in input_clean for palabra in ["sí", "si", "s", "quiero", "agregar", "otro", "más", "mas", "otra"]):
                 self.pedido_manager.estado = EstadoPedido.ESPERANDO_TIPO
                 respuesta = "¡Perfecto! ¿Qué otro mueble te gustaría agregar?\n\n" + \
                            "• Silla\n• Mesa\n• Sofá\n• Estantería\n• Escritorio"
                 self.ultima_respuesta = respuesta
                 return respuesta
-            elif intencion == "finalizar_pedido":  # "no" para finalizar
+            elif any(palabra in input_clean for palabra in ["no", "n", "listo", "terminar", "finalizar", "eso es todo"]):
                 self.pedido_manager.estado = EstadoPedido.FINALIZANDO
                 respuesta = f"📦 **PEDIDO COMPLETO**\n\n{self.pedido_manager.obtener_resumen_detallado()}\n\n" + \
                            "¿Todo correcto? (responde 'sí' para confirmar o 'modificar' para hacer cambios)"
                 self.ultima_respuesta = respuesta
                 return respuesta
 
-        # 8. CONSULTA DE RESUMEN
-        if intencion == "consultar_pedido":
+        # 8. CONFIRMACIÓN FINAL
+        if (any(palabra in input_clean for palabra in ["sí", "si", "confirmar", "correcto", "ok", "vale"]) 
+            and self.pedido_manager.estado == EstadoPedido.FINALIZANDO):
+            
+            self.pedido_manager.estado = EstadoPedido.ESPERANDO_CONTACTO
+            nombre_cliente = f", {self.pedido_manager.nombre_cliente}" if self.pedido_manager.nombre_cliente else ""
+            respuesta = f"📧 **INFORMACIÓN DE CONTACTO**{nombre_cliente}:\n\n" + \
+                       "¡Perfecto! Por favor, compártenos tu email para contactarte:"
+            self.ultima_respuesta = respuesta
+            return respuesta
+
+        # 9. FINALIZACIÓN
+        if self.pedido_manager.estado == EstadoPedido.ESPERANDO_CONTACTO:
+            # Validar email básico
+            if "@" in user_input and "." in user_input:
+                self.pedido_manager.estado = EstadoPedido.COMPLETADO
+                total = self.pedido_manager.calcular_total_pedido()
+                nombre_cliente = f", {self.pedido_manager.nombre_cliente}" if self.pedido_manager.nombre_cliente else ""
+                respuesta = f"""🎉 **¡PEDIDO CONFIRMADO!** 🎉{nombre_cliente}
+
+{self.pedido_manager.obtener_resumen_detallado()}
+
+📧 **Email de contacto:** {user_input}
+
+📅 **Proceso:**
+1. Confirmación por email en 24 horas
+2. Diseño técnico (2-3 días)  
+3. Fabricación (7-10 días)
+4. Entrega programada
+
+¡Gracias por tu pedido! 🛋️"""
+                # Reiniciar para nuevo pedido
+                self.pedido_manager.reiniciar_pedido()
+                self.ultima_respuesta = respuesta
+                return respuesta
+            else:
+                respuesta = "Por favor, ingresa un email válido:"
+                self.ultima_respuesta = respuesta
+                return respuesta
+
+        # 10. PROCESAR MODIFICACIONES AL PEDIDO
+        if self.pedido_manager.items and any(palabra in input_clean for palabra in ["modificar", "cambiar", "eliminar", "quitar", "quita", "borrar"]):
+            resultado_modificacion = self.procesar_modificacion_pedido(input_clean)
+            if resultado_modificacion:
+                self.ultima_respuesta = resultado_modificacion
+                return resultado_modificacion
+
+        # 11. CONSULTA DE RESUMEN
+        if any(palabra in input_clean for palabra in ["resumen", "pedido", "carrito", "qué tengo", "ver pedido"]):
             if self.pedido_manager.items:
                 respuesta = f"📋 **TU PEDIDO ACTUAL:**\n\n{self.pedido_manager.obtener_resumen_detallado()}\n\n" + \
                            "¿Quieres agregar algo más o finalizar?"
@@ -450,16 +410,12 @@ class DesignBotLLM:
                 self.ultima_respuesta = respuesta
                 return respuesta
 
-        # 9. MODIFICACIONES
-        if intencion == "modificar_pedido":
-            if "eliminar" in input_clean:
-                numeros = re.findall(r'\d+', input_clean)
-                if numeros:
-                    index = int(numeros[0]) - 1
-                    if self.pedido_manager.eliminar_item(index):
-                        return f"✅ **Item {index + 1} eliminado del pedido**\n\n{self.pedido_manager.obtener_resumen_detallado()}"
-
-        # ... (resto del código de estados se mantiene igual)
+        # 12. CANCELAR
+        if any(palabra in input_clean for palabra in ["cancelar", "reiniciar", "empezar de nuevo"]):
+            self.pedido_manager.reiniciar_pedido()
+            respuesta = "🔄 **Pedido cancelado**. ¿Te gustaría comenzar un nuevo diseño?"
+            self.ultima_respuesta = respuesta
+            return respuesta
 
         # --- RESPUESTAS POR ESTADO ---
         if self.pedido_manager.estado == EstadoPedido.INICIO:
@@ -481,12 +437,10 @@ class DesignBotLLM:
         else:
             respuesta = "¿En qué más puedo ayudarte con tu pedido de muebles?"
 
-        # ✅ NUEVO: Aplicar personalización de memoria a todas las respuestas
-        respuesta_personalizada = self.memoria.personalizar_respuesta(respuesta)
-        self.ultima_respuesta = respuesta_personalizada
-        return respuesta_personalizada
+        self.ultima_respuesta = respuesta
+        return respuesta
 
-# --- INTERFAZ STREAMLIT (MEJORADA CON INFO DE MEMORIA) ---
+# --- INTERFAZ STREAMLIT ---
 def inicializar_session_state():
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
@@ -497,38 +451,32 @@ def crear_sidebar():
     with st.sidebar:
         st.header("🎯 Panel de Control")
         
+        # Estadísticas rápidas
         pedido_manager = st.session_state.designbot.pedido_manager
         st.metric("📦 Items en pedido", len(pedido_manager.items))
         st.metric("💰 Total", f"${pedido_manager.calcular_total_pedido():.2f}")
         
-        # ✅ NUEVO: Mostrar información de memoria
-        st.markdown("---")
-        st.subheader("🧠 Memoria del Sistema")
-        memoria = st.session_state.designbot.memoria
-        if memoria.nombre_usuario:
-            st.success(f"**👤 Nombre:** {memoria.nombre_usuario}")
-        
-        st.markdown("**⭐ Preferencias:**")
-        for pref, valor in memoria.preferencias.items():
-            if valor:
-                st.write(f"- {pref.replace('_', ' ').title()}: {valor}")
-        
+        # Acciones rápidas
         st.markdown("---")
         st.subheader("⚡ Acciones Rápidas")
+        
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔄 Nuevo Pedido", use_container_width=True):
                 st.session_state.designbot = DesignBotLLM()
                 st.session_state.chat_history = []
                 st.rerun()
+        
         with col2:
             if st.button("📋 Resumen", use_container_width=True) and pedido_manager.items:
                 st.info(pedido_manager.obtener_resumen_detallado())
 
 def mostrar_chat():
     st.subheader("💬 DesignBot Assistant")
-    # ✅ CORREGIDO: Sin parámetro height que causa error
-    chat_container = st.container()
+    
+    # Contenedor de chat
+    chat_container = st.container(height=500)
+    
     with chat_container:
         for mensaje in st.session_state.chat_history:
             with st.chat_message(mensaje["role"]):
@@ -536,15 +484,47 @@ def mostrar_chat():
                 if mensaje.get("timestamp"):
                     st.caption(mensaje["timestamp"])
 
+def panel_control_pedido():
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Gestión de Pedido")
+    
+    pedido_manager = st.session_state.designbot.pedido_manager
+    
+    if pedido_manager.items:
+        # Editor de items en tiempo real
+        st.sidebar.markdown("**✏️ Editar Items:**")
+        for i, item in enumerate(pedido_manager.items):
+            with st.sidebar.expander(f"Item {i+1}: {item.tipo_mueble.title()}", expanded=False):
+                col1, col2 = st.columns(2)
+                with col1:
+                    nueva_cantidad = st.number_input(
+                        "Cantidad:", 
+                        min_value=1, 
+                        value=item.cantidad,
+                        key=f"cant_{i}"
+                    )
+                with col2:
+                    if st.button("🗑️", key=f"del_{i}"):
+                        pedido_manager.eliminar_item(i)
+                        st.rerun()
+                
+                if nueva_cantidad != item.cantidad:
+                    pedido_manager.modificar_cantidad_item(i, nueva_cantidad)
+                    st.rerun()
+
 def procesar_mensaje_usuario(user_input: str):
+    """Procesa el mensaje del usuario y actualiza la interfaz"""
+    # Agregar mensaje del usuario al historial
     st.session_state.chat_history.append({
         "role": "user",
         "content": user_input,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
     
+    # Procesar con DesignBot
     respuesta = st.session_state.designbot.procesar_mensaje(user_input)
     
+    # Agregar respuesta del bot
     st.session_state.chat_history.append({
         "role": "assistant", 
         "content": respuesta,
@@ -554,12 +534,19 @@ def procesar_mensaje_usuario(user_input: str):
     st.rerun()
 
 def main():
+    st.set_page_config(
+        page_title="DesignBot Pro - Muebles Personalizados",
+        page_icon="🛋️",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
     # Inicialización
     inicializar_session_state()
     
     # Header principal
     st.title("🛋️ DesignBot Pro")
-    st.markdown("**Sistema inteligente con memoria e intenciones**")
+    st.markdown("Sistema inteligente para pedidos de muebles personalizados")
     st.markdown("---")
     
     # Layout principal
@@ -567,13 +554,23 @@ def main():
     
     with col1:
         mostrar_chat()
-    
+        
+        # Input de usuario
+        user_input = st.chat_input(
+            "Escribe tu pedido aquí... (ej: '2 sillas pequeñas de madera noble')"
+        )
+        
+        if user_input:
+            procesar_mensaje_usuario(user_input)
+
     with col2:
         crear_sidebar()
+        panel_control_pedido()
         
         # Información del estado
         st.markdown("---")
         st.subheader("📊 Estado del Sistema")
+        
         estados = {
             EstadoPedido.INICIO: "⚪ Esperando inicio",
             EstadoPedido.ESPERANDO_TIPO: "🟡 Eligiendo tipo",
@@ -591,11 +588,6 @@ def main():
             "⚪ Desconocido"
         )
         st.info(f"**Estado:** {estado_actual}")
-
-    # ✅ CORREGIDO: st.chat_input() FUERA de las columnas
-    user_input = st.chat_input("Escribe tu pedido aquí...")
-    if user_input:
-        procesar_mensaje_usuario(user_input)
 
 if __name__ == "__main__":
     main()
