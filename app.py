@@ -656,4 +656,5 @@ def main():
                 st.write(f"- {pref.replace('_', ' ').title()}: {valor}")
                 preferencias_mostradas = True
         
-        if not preferencias
+        if not preferencias:
+            st.write("_No hay preferencias guardas")
