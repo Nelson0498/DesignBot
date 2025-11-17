@@ -527,7 +527,8 @@ def crear_sidebar():
 
 def mostrar_chat():
     st.subheader("💬 DesignBot Assistant")
-    chat_container = st.container(height=500)
+    # ✅ CORREGIDO: Sin parámetro height que causa error
+    chat_container = st.container()
     with chat_container:
         for mensaje in st.session_state.chat_history:
             with st.chat_message(mensaje["role"]):
