@@ -559,7 +559,7 @@ def main():
     
     # Header principal
     st.title("🛋️ DesignBot Pro")
-    st.markdown("**Sistema inteligente con memoria e intenciones**")  # ✅ ACTUALIZADO
+    st.markdown("**Sistema inteligente con memoria e intenciones**")
     st.markdown("---")
     
     # Layout principal
@@ -567,10 +567,7 @@ def main():
     
     with col1:
         mostrar_chat()
-        user_input = st.chat_input("Escribe tu pedido aquí...")
-        if user_input:
-            procesar_mensaje_usuario(user_input)
-
+    
     with col2:
         crear_sidebar()
         
@@ -594,6 +591,11 @@ def main():
             "⚪ Desconocido"
         )
         st.info(f"**Estado:** {estado_actual}")
+
+    # ✅ CORREGIDO: st.chat_input() FUERA de las columnas
+    user_input = st.chat_input("Escribe tu pedido aquí...")
+    if user_input:
+        procesar_mensaje_usuario(user_input)
 
 if __name__ == "__main__":
     main()
